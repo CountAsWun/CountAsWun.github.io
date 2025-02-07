@@ -46,22 +46,20 @@
         let totalSimulations = 0;
         let successfulSimulations = 0;
 
-        // Updates the displayed success rate percentage
         function updatePercentage() {
             let percentage = (totalSimulations === 0) ? 0 : (successfulSimulations / totalSimulations * 100).toFixed(2);
             document.getElementById("percentage").innerText = `Success Rate: ${percentage}%`;
             document.getElementById("total-simulations").innerText = `Total Simulations: ${totalSimulations}`;
         }
 
-        // Shuffles the deck using Fisher-Yates algorithm
         function shuffleDeck(deck) {
             for (let i = deck.length - 1; i > 0; i--) {
+                //const j = Math.floor(Math.random() * (i + 1));
                 const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1);
                 [deck[i], deck[j]] = [deck[j], deck[i]];
             }
         }
 
-        // Simulates a game where we try to draw a specific card
         function simulateGame() {
             let deckSize = 50;
             let copies = parseInt(document.getElementById("copies").value);
@@ -72,8 +70,6 @@
             let useLeadAbility = document.getElementById("lead-ability").checked;
             let targetTurn = parseInt(document.getElementById("target-turn").value);
             let deck = new Array(deckSize).fill("normal");
-
-            // Insert target cards into the deck
             for (let i = 0; i < copies; i++) deck[i] = "target";
             shuffleDeck(deck);
             
@@ -84,7 +80,6 @@
             let discardLog = "";
             let targetCopies = copies;
 
-            // Check if the card is in the starting hand
             if (hand.includes("target")) {
                 document.getElementById("result").innerText = "Card was drawn in starting hand!";
                 totalSimulations++;
@@ -93,7 +88,6 @@
                 return;
             }
 
-            // Turn 1 search effect (removes top 3 cards from deck)
             if (turn === 1 && useSearch) {
                 let searched = deck.splice(0, 3);
                 searched.forEach(card => {
@@ -104,38 +98,36 @@
                 });
             }
 
-            // Main game loop (turn-based drawing and abilities)
             while (deck.length > 0 && turn <= 50) {
-                // Player's turn (draw a card unless it's turn 1 and going first)
-                if (userDraws > 0 && deck.length > 0) {
-                    if (!goingFirst || turn !== 1) {
-                        let drawn = deck.shift();
-                        if (drawn === "target") {
-                            document.getElementById("result").innerText = `Card was drawn on turn ${turn}`;
-                            totalSimulations++;
-                            if (turn <= targetTurn) successfulSimulations++;
-                            updatePercentage();
-                            document.getElementById("discard-log").innerText = discardLog;
-                            return;
+                //if (turn % 2 === 1) { // Player's turn
+                    if (userDraws > 0 && deck.length > 0) {
+                        if (goingFirst == false || turn != 1) {
+                          let drawn = deck.shift();
+                          if (drawn === "target") {
+                              document.getElementById("result").innerText = `Card was drawn on turn ${turn}`;
+                              totalSimulations++;
+                              if (turn <= targetTurn) successfulSimulations++;
+                              updatePercentage();
+                              document.getElementById("discard-log").innerText = discardLog;
+                              return;
+                          }
                         }
                     }
-                }
-                
-                // Lucci lead ability (discard 2 cards)
-                if (turn !== 1 && useLeadAbility && deck.length >= 2) {
-                    if (leadAbilityCount-- > 0) {
-                        let discarded = deck.splice(0, 2);
-                        discarded.forEach(card => {
-                            if (card === "target") {
-                                discardLog += `Card was discarded because of Lucci ability on turn ${turn}\n`;
-                                targetCopies--;
-                            }
-                        });
+                    
+                    if (turn !== 1 && useLeadAbility && deck.length >= 2) {
+                        if (leadAbilityCount-- > 0) {
+                          let discarded = deck.splice(0, 2);
+                          discarded.forEach(card => {
+                              if (card === "target") {
+                                  discardLog += `Card was discarded because of Lucci ability on turn ${turn}\n`;
+                                  targetCopies--;
+                              }
+                          });
+                        }
                     }
-                }
-                userDraws++;
-                
-                // Cycle effect (draw 2 cards on turn 2 or 3 depending on turn order)
+                    userDraws++;
+                //}
+                    
                 if (useCycle) {
                     if ((goingFirst && turn === 3) || (!goingFirst && turn === 2)) {
                         let cycleDraws = Math.min(2, deck.length);
@@ -153,7 +145,6 @@
                     }
                 }
                 
-                // Check if all copies have been discarded
                 if (targetCopies <= 0) {
                     document.getElementById("result").innerText = "All copies of the card were discarded.";
                     document.getElementById("discard-log").innerText = discardLog;
@@ -163,18 +154,50 @@
                 }
                 
                 turn++;
+                if (deck.length === 0) {
+                    document.getElementById("result").innerText = "Game ended without drawing the card.";
+                    totalSimulations++;
+                    updatePercentage();
+                    document.getElementById("discard-log").innerText = discardLog;
+                    return;
+                }
             }
+        }
+
+        function resetSimulator() {
+            /*
+            document.getElementById("copies").value = 2;
+            document.getElementById("lead-ability-count").value = 1;
+            document.getElementById("first").checked = true;
+            document.getElementById("search").checked = false;
+            document.getElementById("lead-ability").checked = false;
+            document.getElementById("target-turn").value = 5;
+            */
+            document.getElementById("result").innerText = "";
+            document.getElementById("discard-log").innerText = "";
+            document.getElementById("percentage").innerText = "Success Rate: 0%";
+            document.getElementById("total-simulations").innerText = "Total Simulations: 0%";
+            totalSimulations = 0;
+            successfulSimulations = 0;
         }
     </script>
 </head>
 <body>
     <div class="container">
         <h1>Lucci Card Draw Simulator</h1>
+        <label>Copies of Card in Deck: <input type="number" id="copies" min="1" max="10" value="2"></label><br>
+        <label>Times Lucci can use lead ability: <input type="number" id="lead-ability-count" min="0" value="1"></label><br>
+        <label>Target Turn: <input type="number" id="target-turn" min="1" max="20" value="5"></label><br>
+        <label><input type="radio" name="turn" id="first" checked> Go First</label>
+        <label><input type="radio" name="turn" id="second"> Go Second</label><br>
+        <label><input type="checkbox" id="search"> Use Search on Turn 1</label><br>
+        <label><input type="checkbox" id="cycle"> Use Kalifa or Sabo cycle</label><br>
+        <label><input type="checkbox" id="lead-ability"> Use Lead Ability</label><br>
         <button onclick="simulateGame()">Simulate</button>
         <button onclick="resetSimulator()">Reset</button>
         <h2 id="result"></h2>
         <h3 id="percentage">Success Rate: 0%</h3>
-        <h3 id="total-simulations">Total Simulations: 0</h3>
+        <h3 id="total-simulations">Total Simulations: 0%</h3>
         <pre id="discard-log"></pre>
     </div>
 </body>
