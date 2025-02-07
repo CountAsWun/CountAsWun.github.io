@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lucci Card Draw Simulator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #121212;
+            color: white;
+        }
+        .container {
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+            text-align: center;
+        }
+        button {
+            margin-top: 10px;
+            padding: 10px 20px;
+            border: none;
+            background-color: #007BFF;
+            color: white;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #discard-log {
+            margin-top: 10px;
+            white-space: pre-wrap;
+            text-align: left;
+            max-width: 400px;
+        }
+    </style>
+    <script>
+        let totalSimulations = 0;
+        let successfulSimulations = 0;
+
+        // Updates the displayed success rate percentage
+        function updatePercentage() {
+            let percentage = (totalSimulations === 0) ? 0 : (successfulSimulations / totalSimulations * 100).toFixed(2);
+            document.getElementById("percentage").innerText = `Success Rate: ${percentage}%`;
+            document.getElementById("total-simulations").innerText = `Total Simulations: ${totalSimulations}`;
+        }
+
+        // Shuffles the deck using Fisher-Yates algorithm
+        function shuffleDeck(deck) {
+            for (let i = deck.length - 1; i > 0; i--) {
+                const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1);
+                [deck[i], deck[j]] = [deck[j], deck[i]];
+            }
+        }
+
+        // Simulates a game where we try to draw a specific card
+        function simulateGame() {
+            let deckSize = 50;
+            let copies = parseInt(document.getElementById("copies").value);
+            let leadAbilityCount = parseInt(document.getElementById("lead-ability-count").value);
+            let goingFirst = document.getElementById("first").checked;
+            let useSearch = document.getElementById("search").checked;
+            let useCycle = document.getElementById("cycle").checked;
+            let useLeadAbility = document.getElementById("lead-ability").checked;
+            let targetTurn = parseInt(document.getElementById("target-turn").value);
+            let deck = new Array(deckSize).fill("normal");
+
+            // Insert target cards into the deck
+            for (let i = 0; i < copies; i++) deck[i] = "target";
+            shuffleDeck(deck);
+            
+            let handSize = 5;
+            let hand = deck.splice(0, handSize);
+            let turn = 1;
+            let userDraws = goingFirst ? 0 : 1;
+            let discardLog = "";
+            let targetCopies = copies;
+
+            // Check if the card is in the starting hand
+            if (hand.includes("target")) {
+                document.getElementById("result").innerText = "Card was drawn in starting hand!";
+                totalSimulations++;
+                successfulSimulations++;
+                updatePercentage();
+                return;
+            }
+
+            // Turn 1 search effect (removes top 3 cards from deck)
+            if (turn === 1 && useSearch) {
+                let searched = deck.splice(0, 3);
+                searched.forEach(card => {
+                    if (card === "target") {
+                        discardLog += "Card was trashed by search on turn 1!\n";
+                        targetCopies--;
+                    }
+                });
+            }
+
+            // Main game loop (turn-based drawing and abilities)
+            while (deck.length > 0 && turn <= 50) {
+                // Player's turn (draw a card unless it's turn 1 and going first)
+                if (userDraws > 0 && deck.length > 0) {
+                    if (!goingFirst || turn !== 1) {
+                        let drawn = deck.shift();
+                        if (drawn === "target") {
+                            document.getElementById("result").innerText = `Card was drawn on turn ${turn}`;
+                            totalSimulations++;
+                            if (turn <= targetTurn) successfulSimulations++;
+                            updatePercentage();
+                            document.getElementById("discard-log").innerText = discardLog;
+                            return;
+                        }
+                    }
+                }
+                
+                // Lucci lead ability (discard 2 cards)
+                if (turn !== 1 && useLeadAbility && deck.length >= 2) {
+                    if (leadAbilityCount-- > 0) {
+                        let discarded = deck.splice(0, 2);
+                        discarded.forEach(card => {
+                            if (card === "target") {
+                                discardLog += `Card was discarded because of Lucci ability on turn ${turn}\n`;
+                                targetCopies--;
+                            }
+                        });
+                    }
+                }
+                userDraws++;
+                
+                // Cycle effect (draw 2 cards on turn 2 or 3 depending on turn order)
+                if (useCycle) {
+                    if ((goingFirst && turn === 3) || (!goingFirst && turn === 2)) {
+                        let cycleDraws = Math.min(2, deck.length);
+                        for (let i = 0; i < cycleDraws; i++) {
+                            let drawn = deck.shift();
+                            if (drawn === "target") {
+                                document.getElementById("result").innerText = `Card was drawn via Kalifa/Sabo ability on turn ${turn}`;
+                                totalSimulations++;
+                                if (turn <= targetTurn) successfulSimulations++;
+                                updatePercentage();
+                                document.getElementById("discard-log").innerText = discardLog;
+                                return;
+                            }
+                        }
+                    }
+                }
+                
+                // Check if all copies have been discarded
+                if (targetCopies <= 0) {
+                    document.getElementById("result").innerText = "All copies of the card were discarded.";
+                    document.getElementById("discard-log").innerText = discardLog;
+                    totalSimulations++;
+                    updatePercentage();
+                    return;
+                }
+                
+                turn++;
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Lucci Card Draw Simulator</h1>
+        <button onclick="simulateGame()">Simulate</button>
+        <button onclick="resetSimulator()">Reset</button>
+        <h2 id="result"></h2>
+        <h3 id="percentage">Success Rate: 0%</h3>
+        <h3 id="total-simulations">Total Simulations: 0</h3>
+        <pre id="discard-log"></pre>
+    </div>
+</body>
+</html>
