@@ -80,7 +80,20 @@
             let discardLog = "";
             let targetCopies = copies;
 
-            if (hand.includes("target")) {
+            if (!hand.includes("target")) {
+                // Perform a one-time mulligan
+                deck = new Array(deckSize).fill("normal");
+                for (let i = 0; i < copies; i++) deck[i] = "target";
+                shuffleDeck(deck);
+                hand = deck.splice(0, handSize);
+                if (hand.includes("target")) {
+                    document.getElementById("result").innerText = "Card was drawn via mulligan!";
+                    totalSimulations++;
+                    successfulSimulations++;
+                    updatePercentage();
+                    return;
+                }
+            } else {
                 document.getElementById("result").innerText = "Card was drawn in starting hand!";
                 totalSimulations++;
                 successfulSimulations++;
@@ -185,6 +198,7 @@
 <body>
     <div class="container">
         <h1>Lucci Card Draw Simulator</h1>
+        <h2>TODO : make drawing searcher random</h2>
         <label>Copies of Card in Deck: <input type="number" id="copies" min="1" max="10" value="2"></label><br>
         <label>Times Lucci can use lead ability: <input type="number" id="lead-ability-count" min="0" value="1"></label><br>
         <label>Target Turn: <input type="number" id="target-turn" min="1" max="20" value="5"></label><br>
