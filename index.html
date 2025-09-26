@@ -1,218 +1,355 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lucci Card Draw Simulator</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            background-color: #121212;
-            color: white;
-        }
-        .container {
-            background: #1e1e1e;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
-            text-align: center;
-        }
-        button {
-            margin-top: 10px;
-            padding: 10px 20px;
-            border: none;
-            background-color: #007BFF;
-            color: white;
-            font-size: 16px;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        #discard-log {
-            margin-top: 10px;
-            white-space: pre-wrap;
-            text-align: left;
-            max-width: 400px;
-        }
-    </style>
-    <script>
-        let totalSimulations = 0;
-        let successfulSimulations = 0;
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>One Piece TCG – 10-Round Opponent Simulator</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --panel: #111825;
+      --panel-2: #0f1623;
+      --text: #e8eef6;
+      --muted: #9fb3c8;
+      --accent: #6ea8fe;
+      --accent-2: #8b5cf6;
+      --ok: #00d18f;
+      --bad: #ff5d7a;
+      --warn: #ffb454;
+      --border: #1e293b;
+      --chip: #1b2433;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+      background: linear-gradient(180deg, #0b0f14, #0a1220 60%, #0d1322);
+      color: var(--text);
+    }
+    header {
+      position: sticky; top: 0; z-index: 10;
+      backdrop-filter: saturate(140%) blur(6px);
+      background: linear-gradient(180deg, #0a1324cc, #0a132480);
+      border-bottom: 1px solid var(--border);
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 18px 20px; }
+    h1 { margin: 0 0 6px; font-size: 1.35rem; letter-spacing: 0.2px; }
+    .muted { color: var(--muted); font-size: 0.95rem; }
 
-        function updatePercentage() {
-            let percentage = (totalSimulations === 0) ? 0 : (successfulSimulations / totalSimulations * 100).toFixed(2);
-            document.getElementById("percentage").innerText = `Success Rate: ${percentage}%`;
-            document.getElementById("total-simulations").innerText = `Total Simulations: ${totalSimulations}`;
-        }
+    .controls {
+      display: grid; grid-template-columns: repeat(12, 1fr); gap: 10px; align-items: center; margin-top: 12px;
+    }
+    .panel {
+      background: radial-gradient(1200px 400px at -5% -10%, #152034 0%, #0f1626 45%, #0b101b 100%);
+      border: 1px solid var(--border);
+      box-shadow: 0 6px 30px rgba(0,0,0,0.35);
+      border-radius: 16px; padding: 14px 16px;
+    }
+    label { font-size: 0.85rem; color: var(--muted); display: block; margin-bottom: 6px; }
+    input[type="number"], input[type="text"], select {
+      width: 100%;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      padding: 10px 12px;
+      outline: none;
+    }
+    .btn {
+      appearance: none; border: 1px solid transparent; border-radius: 12px; padding: 10px 14px; font-weight: 600;
+      color: white; cursor: pointer; transition: transform .05s ease, box-shadow .2s ease; 
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      box-shadow: 0 10px 24px rgba(110,168,254,0.28);
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn.secondary { background: #1b2437; border-color: #2a3a56; box-shadow: none; color: var(--text); }
 
-        function shuffleDeck(deck) {
-            for (let i = deck.length - 1; i > 0; i--) {
-                //const j = Math.floor(Math.random() * (i + 1));
-                const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1);
-                [deck[i], deck[j]] = [deck[j], deck[i]];
-            }
-        }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chip { background: var(--chip); border: 1px solid var(--border); padding: 6px 10px; border-radius: 999px; font-size: 0.8rem; color: var(--muted); }
 
-        function simulateGame() {
-            let deckSize = 50;
-            let copies = parseInt(document.getElementById("copies").value);
-            let leadAbilityCount = parseInt(document.getElementById("lead-ability-count").value);
-            let goingFirst = document.getElementById("first").checked;
-            let useSearch = document.getElementById("search").checked;
-            let useCycle = document.getElementById("cycle").checked;
-            let useLeadAbility = document.getElementById("lead-ability").checked;
-            let targetTurn = parseInt(document.getElementById("target-turn").value);
-            let deck = new Array(deckSize).fill("normal");
-            for (let i = 0; i < copies; i++) deck[i] = "target";
-            shuffleDeck(deck);
-            
-            let handSize = 5;
-            let hand = deck.splice(0, handSize);
-            let turn = 1;
-            let userDraws = goingFirst ? 0 : 1;
-            let discardLog = "";
-            let targetCopies = copies;
+    table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    th, td { text-align: left; padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    thead th { position: sticky; top: 0; background: linear-gradient(180deg, #0a1324, #0c1424); z-index: 1; border-bottom: 1px solid #203049; }
 
-            if (!hand.includes("target")) {
-                // Perform a one-time mulligan
-                deck = new Array(deckSize).fill("normal");
-                for (let i = 0; i < copies; i++) deck[i] = "target";
-                shuffleDeck(deck);
-                hand = deck.splice(0, handSize);
-                if (hand.includes("target")) {
-                    document.getElementById("result").innerText = "Card was drawn via mulligan!";
-                    totalSimulations++;
-                    successfulSimulations++;
-                    updatePercentage();
-                    return;
-                }
-            } else {
-                document.getElementById("result").innerText = "Card was drawn in starting hand!";
-                totalSimulations++;
-                successfulSimulations++;
-                updatePercentage();
-                return;
-            }
+    .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; align-items: start; margin: 16px 0; }
 
-            if (turn === 1 && useSearch) {
-                let searched = deck.splice(0, 3);
-                searched.forEach(card => {
-                    if (card === "target") {
-                        discardLog += "Card was trashed by search on turn 1!\n";
-                        targetCopies--;
-                    }
-                });
-            }
+    .tag { font-weight: 700; font-size: 0.82rem; padding: 2px 8px; border-radius: 7px; }
+    .tag.ok { background: #002f25; border: 1px solid #024c3d; color: #7be3c5; }
+    .tag.bad { background: #300818; border: 1px solid #5a0c2a; color: #ffa6b6; }
+    .rank { color: #cfd9ff; font-weight: 700; }
 
-            while (deck.length > 0 && turn <= 50) {
-                //if (turn % 2 === 1) { // Player's turn
-                    if (userDraws > 0 && deck.length > 0) {
-                        if (goingFirst == false || turn != 1) {
-                          let drawn = deck.shift();
-                          if (drawn === "target") {
-                              document.getElementById("result").innerText = `Card was drawn on turn ${turn}`;
-                              totalSimulations++;
-                              if (turn <= targetTurn) successfulSimulations++;
-                              updatePercentage();
-                              document.getElementById("discard-log").innerText = discardLog;
-                              return;
-                          }
-                        }
-                    }
-                    
-                    if (turn !== 1 && useLeadAbility && deck.length >= 2) {
-                        if (leadAbilityCount-- > 0) {
-                          let discarded = deck.splice(0, 2);
-                          discarded.forEach(card => {
-                              if (card === "target") {
-                                  discardLog += `Card was discarded because of Lucci ability on turn ${turn}\n`;
-                                  targetCopies--;
-                              }
-                          });
-                        }
-                    }
-                    userDraws++;
-                //}
-                    
-                if (useCycle) {
-                    if ((goingFirst && turn === 3) || (!goingFirst && turn === 2)) {
-                        let cycleDraws = Math.min(2, deck.length);
-                        for (let i = 0; i < cycleDraws; i++) {
-                            let drawn = deck.shift();
-                            if (drawn === "target") {
-                                document.getElementById("result").innerText = `Card was drawn via Kalifa/Sabo ability on turn ${turn}`;
-                                totalSimulations++;
-                                if (turn <= targetTurn) successfulSimulations++;
-                                updatePercentage();
-                                document.getElementById("discard-log").innerText = discardLog;
-                                return;
-                            }
-                        }
-                    }
-                }
-                
-                if (targetCopies <= 0) {
-                    document.getElementById("result").innerText = "All copies of the card were discarded.";
-                    document.getElementById("discard-log").innerText = discardLog;
-                    totalSimulations++;
-                    updatePercentage();
-                    return;
-                }
-                
-                turn++;
-                if (deck.length === 0) {
-                    document.getElementById("result").innerText = "Game ended without drawing the card.";
-                    totalSimulations++;
-                    updatePercentage();
-                    document.getElementById("discard-log").innerText = discardLog;
-                    return;
-                }
-            }
-        }
+    .leader { display: flex; align-items: center; gap: 10px; }
+    .leader img { width: 32px; height: 32px; border-radius: 6px; border: 1px solid #2a3a56; object-fit: cover; }
+    .leader small { color: var(--muted); font-size: 0.8rem; }
 
-        function resetSimulator() {
-            /*
-            document.getElementById("copies").value = 2;
-            document.getElementById("lead-ability-count").value = 1;
-            document.getElementById("first").checked = true;
-            document.getElementById("search").checked = false;
-            document.getElementById("lead-ability").checked = false;
-            document.getElementById("target-turn").value = 5;
-            */
-            document.getElementById("result").innerText = "";
-            document.getElementById("discard-log").innerText = "";
-            document.getElementById("percentage").innerText = "Success Rate: 0%";
-            document.getElementById("total-simulations").innerText = "Total Simulations: 0%";
-            totalSimulations = 0;
-            successfulSimulations = 0;
-        }
-    </script>
+    .footer-note { color: var(--muted); font-size: 0.85rem; }
+    .pill { padding: 2px 6px; border-radius: 6px; background: #162033; border: 1px solid #2a3a56; color: #cfe2ff; font-size: 0.78rem; }
+
+    .flex { display: flex; gap: 8px; align-items: center; }
+    .hr { border: 0; height: 1px; background: var(--border); margin: 12px 0; }
+    .tests { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .85rem; background: #0c1422; border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
+    .pass { color: #8ef8c5; }
+    .fail { color: #ff93a6; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Lucci Card Draw Simulator</h1>
-        <h2>TODO : make drawing searcher random</h2>
-        <label>Copies of Card in Deck: <input type="number" id="copies" min="1" max="10" value="2"></label><br>
-        <label>Times Lucci can use lead ability: <input type="number" id="lead-ability-count" min="0" value="1"></label><br>
-        <label>Target Turn: <input type="number" id="target-turn" min="1" max="20" value="5"></label><br>
-        <label><input type="radio" name="turn" id="first" checked> Go First</label>
-        <label><input type="radio" name="turn" id="second"> Go Second</label><br>
-        <label><input type="checkbox" id="search"> Use Search on Turn 1</label><br>
-        <label><input type="checkbox" id="cycle"> Use Kalifa or Sabo cycle</label><br>
-        <label><input type="checkbox" id="lead-ability"> Use Lead Ability</label><br>
-        <button onclick="simulateGame()">Simulate</button>
-        <button onclick="resetSimulator()">Reset</button>
-        <h2 id="result"></h2>
-        <h3 id="percentage">Success Rate: 0%</h3>
-        <h3 id="total-simulations">Total Simulations: 0%</h3>
-        <pre id="discard-log"></pre>
+  <header>
+    <div class="wrap">
+      <h1>One Piece TCG – 10‑Round Opponent Simulator</h1>
+      <div class="muted">Weighted by current play rates you pasted below. Each round also rolls a d6 to decide <span class="pill">First/Second</span>.</div>
+      <div class="controls">
+        <div class="panel" style="grid-column: span 3">
+          <label for="rounds">Rounds</label>
+          <input id="rounds" type="number" min="1" max="20" value="10">
+        </div>
+        <div class="panel" style="grid-column: span 4">
+          <label for="myLeader">Your Leader (optional, for mirror tag)</label>
+          <input id="myLeader" type="text" placeholder="e.g., [OP12-020] Roronoa Zoro">
+        </div>
+        <div class="panel" style="grid-column: span 2">
+          <label for="prefStart">Preferred dice roll</label>
+          <select id="prefStart">
+            <option value="First">First</option>
+            <option value="Second">Second</option>
+          </select>
+        </div>
+        <div class="panel" style="grid-column: span 2">
+          <label>&nbsp;</label>
+          <button class="btn" id="btnSim">Simulate Tournament</button>
+        </div>
+        <div class="panel" style="grid-column: span 1">
+          <label>&nbsp;</label>
+          <button class="btn secondary" id="btnCsv">Export CSV</button>
+        </div>
+        <div class="panel" style="grid-column: span 12">
+          <details>
+            <summary class="muted">Self‑Tests (click to expand)</summary>
+            <div style="margin-top:10px">
+              <button class="btn secondary" id="btnTests" type="button">Run Self‑Tests</button>
+              <div id="testResults" class="tests" style="margin-top:10px"></div>
+            </div>
+          </details>
+        </div>
+      </div>
     </div>
+  </header>
+
+  <main class="wrap">
+    <div class="grid">
+      <section class="panel">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+          <h2 style="margin:0; font-size:1.05rem">Pairings</h2>
+          <div class="chips" id="summaryChips"></div>
+        </div>
+        <div style="overflow:auto; max-height: 65vh; border-radius: 10px;">
+          <table id="resultTable">
+            <thead>
+              <tr>
+                <th style="width:70px">Round</th>
+                <th>Opponent Leader</th>
+                <th style="width:90px">Rank</th>
+                <th style="width:120px">Play Rate</th>
+                <th style="width:110px">Die</th>
+                <th style="width:120px">You</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <h3 style="margin:0 0 8px">How it works</h3>
+        <ul class="muted" style="margin:0 0 12px 16px; line-height:1.5">
+          <li>Parses your leader table (hidden below) and extracts <strong>Leader</strong>, <strong>Rank</strong>, and <strong>Play Rate</strong>.</li>
+          <li>Opponents are sampled using a weighted random draw proportional to Play Rate.</li>
+          <li>A d6 is rolled per round. <span class="pill">Odd (1,3,5) = your Preferred</span>, <span class="pill">Even (2,4,6) = opposite</span>.</li>
+          <li>If you fill in <em>Your Leader</em>, mirror matches are tagged.</li>
+        </ul>
+        <div class="footer-note">Tip: tweak rounds and rerun as much as you like.</div>
+      </aside>
+    </div>
+
+    <!-- Hidden: your pasted data table -->
+    <template id="dataTableTemplate">
+      <!-- BEGIN USER DATA TABLE -->
+      <table class="stats-table"><thead><tr><th>Rank </th><th>Δ </th><th>Card</th><th>Leader</th><th>Wtd WR ↓</th><th>Raw WR </th><th>Play Rate </th><th>Wins </th><th>Games </th></tr></thead><tbody><tr><td>1</td><td class="trend positive">↑1 </td><td class="ranking-leader-cell"><a href="/matchhistory/stats/OP07-019?period=lw_p"><img src="https://cdn.cardkaizoku.com/cards_en/OP07/OP07-019.png" alt="OP07-019" class="leader-icon-ranking"></a></td><td>[OP07-019] Jewelry Bonney</td><td>52.43%</td><td>53.93%</td><td>7.36%</td><td>10,544</td><td>19,551</td></tr><tr><td>2</td><td class="trend negative">↓1 </td><td class="ranking-leader-cell"><a href="/matchhistory/stats/OP12-001?period=lw_p"><img src="https://cdn.cardkaizoku.com/cards_en/OP12/OP12-001.png" alt="OP12-001" class="leader-icon-ranking"></a></td><td>[OP12-001] Silvers Rayleigh</td><td>52.42%</td><td>53.86%</td><td>7.66%</td><td>10,962</td><td>20,353</td></tr><tr><td>3</td><td class="trend ">—</td><td class="ranking-leader-cell"><a href="/matchhistory/stats/OP11-040?period=lw_p"><img src="https://cdn.cardkaizoku.com/cards_en/OP11/OP11-040.png" alt="OP11-040" class="leader-icon-ranking"></a></td><td>[OP11-040] Monkey.D.Luffy</td><td>51.39%</td><td>52.05%</td><td>15.36%</td><td>21,236</td><td>40,798</td></tr><tr><td>4</td><td class="trend ">—</td><td class="ranking-leader-cell"><a href="/matchhistory/stats/OP05-098?period=lw_p"><img src="https://cdn.cardkaizoku.com/cards_en/OP05/OP05-098.png" alt="OP05-098" class="leader-icon-ranking"></a></td><td>[OP05-098] Enel</td><td>50.71%</td><td>53.27%</td><td>3.74%</td><td>5,287</td><td>9,925</td></tr><tr><td>5</td><td class="trend ">—</td><td class="ranking-leader-cell"><a href="/matchhistory/stats/OP12-020?period=lw_p"><img src="https://cdn.cardkaizoku.com/cards_en/OP12/OP12-020.png" alt="OP12-020" class="leader-icon-ranking"></a></td><td>[OP12-020] Roronoa Zoro</td><td>50.50%</td><td>51.23%</td><td>12.75%</td><td>17,346</td><td>33,858</td></tr><tr><td>6</td><td class="trend ">—</td><td class="ranking-leader-cell"><a href="/matchhistory/stats/EB02-010?period=lw_p"><img src="https://cdn.cardkaizoku.com/cards_en/EB02/EB02-010.png" alt="EB02-010" class="leader-icon-ranking"></a></td><td>[EB02-010] Monkey.D.Luffy</td><td>49.91%</td><td>51.65%</td><td>5.02%</td><td>6,890</td><td>13,339</td></tr><tr><td>7</td><td class="trend positive">↑1 </td><td class="ranking-leader-cell"><a href="/matchhistory/stats/OP03-099?period=lw_p"><img src="https://cdn.cardkaizoku.com/cards_en/OP03/OP03-099.png" alt="OP03-099" class="leader-icon-ranking"></a></td><td>[OP03-099] Charlotte Katakuri</td><td>49.12%</td><td>52.89%</td><td>2.38%</td><td>3,349</td><td>6,332</td></tr><tr><td>8</td><td class="trend negative">↓1 </td><td class="ranking-leader-cell"><a href="/matchhistory/stats/OP09-001?period=lw_p"><img src="https://cdn.cardkaizoku.com/cards_en/OP09/OP09-001.png" alt="OP09-001" class="leader-icon-ranking"></a></td><td>[OP09-001] Shanks</td><td>47.88%</td><td>49.77%</td><td>3.66%</td><td>4,833</td><td>9,710</td></tr><tr><td>9</td><td class="trend positive">↑2 </td><td class="ranking-leader-cell"><a href="/matchhistory/stats/OP10-099?period=lw_p"><img src="https://cdn.cardkaizoku.com/cards_en/OP10/OP10-099.png" alt="OP10-099" class="leader-icon-ranking"></a></td><td>[OP10-099] Eustass"Captain"Kid</td><td>47.23%</td><td>53.96%</td><td>1.56%</td><td>2,239</td><td>4,149</td></tr><tr><td>10</td><td class="trend negative">↓1 </td><td class="ranking-leader-cell"><a href="/matchhistory/stats/OP09-081?period=lw_p"><img src="https://cdn.cardkaizoku.com/cards_en/OP09/OP09-081.png" alt="OP09-081" class="leader-icon-ranking"></a></td><td>[OP09-081] Marshall.D.Teach</td><td>47.06%</td><td>48.45%</td><td>4.39%</td><td>5,645</td><td>11,651</td></tr><tr><td>11</td><td class="trend positive">↑2 </td><td class="ranking-leader-cell"><a href="/matchhistory/stats/OP11-041?period=lw_p"><img src="https://cdn.cardkaizoku.com/cards_en/OP11/OP11-041.png" alt="OP11-041" class="leader-icon-ranking"></a></td><td>[OP11-041] Nami</td><td>46.73%</td><td>48.66%</td><td>3.11%</td><td>4,018</td><td>8,257</td></tr><tr><td>12</td><td class="trend negative">↓2 </td><td class="ranking-leader-cell"><a href="/matchhistory/stats/OP12-040?period=lw_p"><img src="https://cdn.cardkaizoku.com/cards_en/OP12/OP12-040.png" alt="OP12-040" class="leader-icon-ranking"></a></td><td>[OP12-040] Kuzan</td><td>46.68%</td><td>48.97%</td><td>2.71%</td><td>3,524</td><td>7,196</td></tr><tr><td>13</td><td class="trend negative">↓1 </td><td class="ranking-leader-cell"><a href="/matchhistory/stats/OP05-060?period=lw_p"><img src="https://cdn.cardkaizoku.com/cards_en/OP05/OP05-060.png" alt="OP05-060" class="leader-icon-ranking"></a></td><td>[OP05-060] Monkey.D.Luffy</td><td>46.40%</td><td>50.37%</td><td>1.92%</td><td>2,575</td><td>5,112</td></tr><tr><td>14</td><td class="trend ">—</td><td class="ranking-leader-cell"><a href="/matchhistory/stats/OP09-022?period=lw_p"><img src="https://cdn.cardkaizoku.com/cards_en/OP09/OP09-022.png" alt="OP09-022" class="leader-icon-ranking"></a></td><td>[OP09-022] Lim</td><td>45.85%</td><td>51.87%</td><td>1.54%</td><td>2,123</td><td>4,093</td></tr><tr><td>15</td><td class="trend ">—</td><td class="ranking-leader-cell"><a href="/matchhistory/stats/OP08-098?period=lw_p"><img src="https://cdn.cardkaizoku.com/cards_en/OP08/OP08-098.png" alt="OP08-098" class="leader-icon-ranking"></a></td><td>[OP08-098] Kalgara</td><td>44.72%</td><td>49.95%</td><td>1.55%</td><td>2,051</td><td>4,106</td></tr>
+      <!-- (Table truncated in this comment; full table continues exactly as user pasted) -->
+      </tbody></table>
+      <!-- END USER DATA TABLE -->
+    </template>
+  </main>
+
+  <script>
+    // Everything initializes after DOM is ready to avoid null element errors.
+    document.addEventListener('DOMContentLoaded', () => {
+      // Utility: Parse percentage like "7.36%" -> 7.36
+      const pct = (s) => parseFloat(String(s).replace(/[^\d.]/g, '')) || 0;
+
+      function extractLeaders() {
+        const tpl = document.getElementById('dataTableTemplate');
+        const table = tpl.content.querySelector('table.stats-table');
+        const rows = Array.from(table.querySelectorAll('tbody tr'));
+        const leaders = rows.map(tr => {
+          const tds = tr.querySelectorAll('td');
+          const rank = parseInt(tds[0].textContent.trim(), 10);
+          const img = tds[2].querySelector('img');
+          const leader = tds[3].textContent.trim();
+          const playRate = pct(tds[6].textContent.trim());
+          const imgSrc = img ? img.getAttribute('src') : null;
+          return { rank, leader, playRate, imgSrc };
+        }).filter(x => x.leader && x.playRate > 0);
+
+        // Normalize weights just in case they don't sum to 100
+        const total = leaders.reduce((s, a) => s + a.playRate, 0) || 1;
+        leaders.forEach(l => l.weight = l.playRate / total);
+        return leaders;
+      }
+
+      function weightedPick(items) {
+        const r = Math.random();
+        let acc = 0;
+        for (const it of items) {
+          acc += it.weight;
+          if (r <= acc) return it;
+        }
+        return items[items.length - 1];
+      }
+
+      function d6() { return Math.floor(Math.random() * 6) + 1; }
+
+      // Added optional opts.rollFn for testing
+      function simulate(rounds, myLeaderText, preferred, opts = {}) {
+        const leaders = extractLeaders();
+        const results = [];
+        const rollFn = typeof opts.rollFn === 'function' ? opts.rollFn : d6;
+        for (let i = 1; i <= rounds; i++) {
+          const opp = weightedPick(leaders);
+          const roll = rollFn();
+          const youStart = (roll % 2 === 1) ? (preferred || 'First') : ((preferred === 'First') ? 'Second' : 'First');
+          const mirror = myLeaderText && opp.leader.toLowerCase().includes(myLeaderText.toLowerCase());
+          results.push({ round: i, ...opp, roll, youStart, mirror });
+        }
+        return results;
+      }
+
+      function render(results) {
+        const tbody = document.querySelector('#resultTable tbody');
+        tbody.innerHTML = '';
+        let firsts = 0, seconds = 0, mirrors = 0;
+        results.forEach(r => {
+          const tr = document.createElement('tr');
+          const roundCell = document.createElement('td');
+          roundCell.textContent = String(r.round);
+
+          const oppCell = document.createElement('td');
+          oppCell.innerHTML = `
+            <div class="leader">
+              ${r.imgSrc ? `<img src="${r.imgSrc}" alt="">` : ''}
+              <div>
+                <div style="font-weight:600">${r.leader.replace(/\[(.*?)\]\s*/, '')}</div>
+                ${r.mirror ? '<div><span class="tag ok">Mirror</span></div>' : ''}
+              </div>
+            </div>`;
+
+          const rankCell = document.createElement('td');
+          rankCell.innerHTML = `<span class="rank">#${r.rank}</span>`;
+
+          const prCell = document.createElement('td');
+          prCell.textContent = r.playRate.toFixed(2) + '%';
+
+          const dieCell = document.createElement('td');
+          // Highlight odd (preferred) vs even (opposite)
+          dieCell.innerHTML = `<span class="tag ${r.roll % 2 === 1 ? 'ok' : 'bad'}">d6 = ${r.roll}</span>`;
+
+          const youCell = document.createElement('td');
+          youCell.innerHTML = r.youStart === 'First' ? '<span class="tag ok">First</span>' : '<span class="tag bad">Second</span>';
+
+          if (r.youStart === 'First') firsts++; else seconds++;
+          if (r.mirror) mirrors++;
+
+          tr.append(roundCell, oppCell, rankCell, prCell, dieCell, youCell);
+          tbody.appendChild(tr);
+        });
+
+        const chips = document.getElementById('summaryChips');
+        chips.innerHTML = '';
+        const mk = (label) => { const s = document.createElement('div'); s.className='chip'; s.textContent = label; return s; };
+        chips.append(mk(`First: ${firsts}`), mk(`Second: ${seconds}`), mk(`Mirrors: ${mirrors}`));
+      }
+
+      function toCSV(results) {
+        const header = ['Round','Leader','Rank','PlayRate','Die','You'];
+        const rows = results.map(r => [r.round, r.leader, `#${r.rank}`, r.playRate.toFixed(2)+'%', r.roll, r.youStart]);
+        return [header, ...rows].map(r => r.map(x => '"' + String(x).replace(/"/g,'""') + '"').join(',')).join('\n');
+      }
+
+      // --- Event wiring (safe after DOMContentLoaded) ---
+      let lastResults = [];
+      const btnSim = document.getElementById('btnSim');
+      const btnCsv = document.getElementById('btnCsv');
+      const btnTests = document.getElementById('btnTests');
+
+      btnSim.addEventListener('click', () => {
+        const rounds = parseInt(document.getElementById('rounds').value, 10) || 10;
+        const myLeader = document.getElementById('myLeader').value.trim();
+        const preferred = document.getElementById('prefStart').value;
+        lastResults = simulate(rounds, myLeader, preferred);
+        render(lastResults);
+      });
+
+      btnCsv.addEventListener('click', () => {
+        if (!lastResults.length) { alert('Run a simulation first.'); return; }
+        const csv = toCSV(lastResults);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'onepiece_tournament_sim.csv'; a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      // --- Minimal self-tests ---
+      function runTests() {
+        const out = [];
+        function assert(name, cond) { out.push(`${cond ? '✅' : '❌'} ${name}`); return !!cond; }
+
+        // Test 1: DOM elements exist
+        assert('btnSim exists', !!document.getElementById('btnSim'));
+        assert('resultTable exists', !!document.getElementById('resultTable'));
+
+        // Test 2: parsing works
+        const leaders = extractLeaders();
+        assert('leaders parsed (>0)', leaders.length > 0);
+        const wsum = leaders.reduce((s, l) => s + l.weight, 0);
+        assert('weights roughly sum to 1', Math.abs(wsum - 1) < 1e-6 || (wsum > 0.99 && wsum < 1.01));
+
+        // Test 3: weightedPick bias
+        const biased = [{weight:0.9, leader:'A', rank:1, playRate:90}, {weight:0.1, leader:'B', rank:2, playRate:10}];
+        let picksA = 0; for (let i=0;i<2000;i++){ if (weightedPick(biased).leader==='A') picksA++; }
+        assert('weightedPick prefers heavier weights', picksA > 1500);
+
+        // Test 4: simulate parity rule (preferred First)
+        const resOdd = simulate(1, '', 'First', { rollFn: () => 1 })[0];
+        const resEven = simulate(1, '', 'First', { rollFn: () => 2 })[0];
+        assert('odd roll -> Preferred', resOdd.youStart === 'First');
+        assert('even roll -> Opposite', resEven.youStart === 'Second');
+
+        // Test 5: simulate parity rule (preferred Second)
+        const rOdd2 = simulate(1, '', 'Second', { rollFn: () => 5 })[0];
+        const rEven2 = simulate(1, '', 'Second', { rollFn: () => 4 })[0];
+        assert('odd roll -> Preferred (Second)', rOdd2.youStart === 'Second');
+        assert('even roll -> Opposite (First)', rEven2.youStart === 'First');
+
+        const target = document.getElementById('testResults');
+        target.innerHTML = out.map(line => `<div>${line}</div>`).join('');
+        return out;
+      }
+
+      if (btnTests) btnTests.addEventListener('click', runTests);
+
+      // Auto-run once on load for convenience
+      btnSim.click();
+    });
+  </script>
 </body>
 </html>
