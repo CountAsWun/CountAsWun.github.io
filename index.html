@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>One Piece TCG – 10-Round Opponent Simulator v0.3</title>
+  <title>One Piece TCG – 10-Round Opponent Simulator</title>
   <style>
     :root {
       --bg: #0b0f14;
@@ -98,7 +98,7 @@
 <body>
   <header>
     <div class="wrap">
-      <h1>One Piece TCG – 10‑Round Opponent Simulator v0.3</h1>
+      <h1>One Piece TCG – 10‑Round Opponent Simulator</h1>
       <div class="muted">Weighted by current play rates you pasted below. Each round also rolls a d6 to decide <span class="pill">First/Second</span>.</div>
       <div class="controls">
         <div class="panel" style="grid-column: span 3">
@@ -132,11 +132,12 @@
           </div>
           <div>
             <div class="flex" style="justify-content:space-between; margin-bottom:6px">
-              <label for="phaseSlider" style="margin:0">Phaser strength</label>
-              <span class="pill" id="phaseValue">1.40×</span>
+              <label for="phaseSlider" style="margin:0">Phase exponent (α)</label>
+              <span class="pill" id="phaseValue">α = 1.25</span>
             </div>
-            <input id="phaseSlider" type="range" min="0" max="3" step="0.05" value="1.40" />
-            <div class="muted" style="font-size:0.8rem; margin-top:4px">Controls how quickly low‑play‑rate decks phase out across rounds.</div>
+            <!-- Slider now limits α between 1.05 and 1.50, default 1.25 -->
+            <input id="phaseSlider" type="range" min="1.05" max="1.5" step="0.01" value="1.25" />
+            <div class="muted" style="font-size:0.8rem; margin-top:4px">Late‑round α target. Early rounds ease up from 1.00 → α using a smooth curve.</div>
           </div>
         </div>
         <div class="panel" style="grid-column: span 12">
@@ -230,16 +231,15 @@
       }
 
       // Round-aware weight adjustment for "Phase out Rogues"
-      // Uses an annealed exponent: w' = (w + eps) ^ alpha(r), where alpha grows over rounds
-      // strengthK is the user-controlled slider value (0..3)
-      function roundWeights(leaders, roundIndex, totalRounds, enabled, strengthK) {
+      // New behavior: slider directly represents the **target late-round exponent α ∈ [1.05, 1.50]**.
+      // We ease from α=1.00 on round 1 up to α_target on the last round using t^1.5.
+      function roundWeights(leaders, roundIndex, totalRounds, enabled, alphaTarget) {
         const base = baseWeights(leaders);
         if (!enabled) return base;
         const eps = 1e-9;
         const t = totalRounds > 1 ? (roundIndex - 1) / (totalRounds - 1) : 1; // 0..1
-        const k = Math.max(0, Number(strengthK) || 0);
-        // alpha ramps from 1.0 (no change) up to 1 + k by the last round; eased with t^1.5
-        const alpha = 1 + k * Math.pow(t, 1.5);
+        const aT = Math.min(1.5, Math.max(1.05, Number(alphaTarget) || 1.25));
+        const alpha = 1 + (aT - 1) * Math.pow(t, 1.5); // 1.00 → aT across rounds
         const raised = base.map(w => Math.pow(w + eps, alpha));
         return normalizeWeights(raised);
       }
@@ -256,15 +256,15 @@
 
       function d6() { return Math.floor(Math.random() * 6) + 1; }
 
-      // simulate: opts.rollFn (test hook), opts.phaseOut (bool), opts.k (strength)
+      // simulate: opts.rollFn (test hook), opts.phaseOut (bool), opts.alpha (target exponent)
       function simulate(rounds, myLeaderText, preferred, opts = {}) {
         const leaders = extractLeaders();
         const results = [];
         const rollFn = typeof opts.rollFn === 'function' ? opts.rollFn : d6;
         const phaseOut = !!opts.phaseOut;
-        const k = Number(opts.k) || 0;
+        const alphaTarget = Number(opts.alpha) || 1.25;
         for (let i = 1; i <= rounds; i++) {
-          const weights = roundWeights(leaders, i, rounds, phaseOut, k);
+          const weights = roundWeights(leaders, i, rounds, phaseOut, alphaTarget);
           const opp = weightedPickWithWeights(leaders, weights);
           const roll = rollFn();
           const youStart = (roll % 2 === 1) ? (preferred || 'First') : ((preferred === 'First') ? 'Second' : 'First');
@@ -335,7 +335,12 @@
 
       function syncPhaseUI() {
         phaseSlider.disabled = !phaseCheckbox.checked;
-        phaseValue.textContent = `${Number(phaseSlider.value).toFixed(2)}×`;
+        // Clamp and show with two decimals
+        let val = Number(phaseSlider.value);
+        if (isNaN(val)) val = 1.25;
+        val = Math.min(1.5, Math.max(1.05, val));
+        phaseSlider.value = String(val);
+        phaseValue.textContent = `α = ${val.toFixed(2)}`;
         phaseValue.style.opacity = phaseCheckbox.checked ? '1' : '0.5';
       }
       phaseCheckbox.addEventListener('change', syncPhaseUI);
@@ -347,8 +352,8 @@
         const myLeader = document.getElementById('myLeader').value.trim();
         const preferred = document.getElementById('prefStart').value;
         const phaseOut = phaseCheckbox.checked;
-        const k = Number(phaseSlider.value) || 0;
-        lastResults = simulate(rounds, myLeader, preferred, { phaseOut, k });
+        const alphaTarget = Number(phaseSlider.value) || 1.25; // α ∈ [1.05, 1.50]
+        lastResults = simulate(rounds, myLeader, preferred, { phaseOut, alpha: alphaTarget });
         render(lastResults);
       });
 
@@ -397,17 +402,17 @@
         assert('odd roll -> Preferred (Second)', rOdd2.youStart === 'Second');
         assert('even roll -> Opposite (First)', rEven2.youStart === 'First');
 
-        // Test 6: phase-out strengthens top weight over rounds when k>0
+        // Test 6: phase-out strengthens top weight over rounds when α_target is larger
         const tiny = [{playRate:15, leader:'Top'},{playRate:3, leader:'Rogue'}];
-        const early = roundWeights(tiny, 1, 10, true, 1.4);
-        const lateWeak = roundWeights(tiny, 10, 10, true, 0.5);
-        const lateStrong = roundWeights(tiny, 10, 10, true, 2.0);
+        const early = roundWeights(tiny, 1, 10, true, 1.25);
+        const lateWeak = roundWeights(tiny, 10, 10, true, 1.10);
+        const lateStrong = roundWeights(tiny, 10, 10, true, 1.50);
         assert('lateStrong top > lateWeak top', lateStrong[0] > lateWeak[0]);
         assert('lateStrong rogue < lateWeak rogue', lateStrong[1] < lateWeak[1]);
 
         // Test 7: when phase-out disabled, weights stay the same across rounds
-        const early2 = roundWeights(tiny, 1, 10, false, 2.0);
-        const late2 = roundWeights(tiny, 10, 10, false, 2.0);
+        const early2 = roundWeights(tiny, 1, 10, false, 1.50);
+        const late2 = roundWeights(tiny, 10, 10, false, 1.50);
         assert('weights unchanged without phase-out (top)', Math.abs(early2[0] - late2[0]) < 1e-12);
         assert('weights unchanged without phase-out (rogue)', Math.abs(early2[1] - late2[1]) < 1e-12);
 
